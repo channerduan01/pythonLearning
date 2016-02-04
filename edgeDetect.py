@@ -36,11 +36,16 @@ def createGaussianTemplate(size,sigma):
     template = template/amount
     return template
     
-def createLaplacianTemplate(size):
+def createLaplacianTemplate(size,complex_=True):
     template=np.zeros((size,size),dtype=np.float)
     c = np.floor(size/2)
-    template[:] = -1;
-    template[c,c] = np.int(np.power(size,2)-1);
+    if complex_:
+        template[:] = -1
+        template[c,c] = np.int(np.power(size,2)-1)
+    else:
+        template[:,c] = -1
+        template[c,:] = -1
+        template[c,c] = 2*c-1
     return template
     
 def createLoGTemplate(size,sigma):
@@ -51,7 +56,7 @@ def createLoGTemplate(size,sigma):
             template[i,j] = (np.power(j-c,2)+np.power(i-c,2)-2*np.power(sigma,2))/np.power(sigma,4) * \
             np.exp( -( (np.power(j-c,2)+np.power(i-c,2))/(2*np.power(sigma,2)) ) )
     template /= np.sum(template)
-    return template
+    return normalize(template)
     
 def imageFilter(src,template):
     s = src.shape
@@ -94,26 +99,27 @@ def drawFigures(params):
     return
     
 def compareDifferentTypes(image):
+    sigma = 2
+    size = 11
     with Timer() as t:
-        test1 = imageFilter(image,createGaussianTemplate(9,2))
-        test1 = imageFilter(test1,createLaplacianTemplate(9))
+        test1 = imageFilter(image,createGaussianTemplate(size,sigma))
+        test1 = imageFilter(test1,createLaplacianTemplate(size,True))
     print "=> Gaussian+Laplacian spent: %s s" % t.secs
     test1 = zeroCross(test1)
     with Timer() as t:
-        test2 = imageFilter(image,createLoGTemplate(9,2))
-    print "=> LoG spent: %s s" % t.secs    
+        test2 = imageFilter(image,createLoGTemplate(size,sigma))
+    print "=> LoG spent: %s s" % t.secs
     test2 = zeroCross(test2)
     with Timer() as t:
-        test3 = marrByCv(image,9,2)
+        test3 = marrByCv(image,size,sigma)
         test3 = normalize(test3)
     print "=> opencv Gaussian+Laplacian spent: %s s" % t.secs
     test3 = zeroCross(test3)
     with Timer() as t:
-        test4 = imageFourierFilter(image,createGaussianTemplate(9,2))
-        test4 = normalize(test4)
+        test4 = imageFourierFilter(image,createLoGTemplate(size,sigma))
     print "=> Fourier LoG spent: %s s" % t.secs
     test4 = zeroCross(test4)
-    drawList = ['gaussian+laplacian',test1,'LoG',test2,'opencv gaussian+laplacian',test3,'Fourier LoG',test4]
+    drawList = ['original',image,'gaussian+laplacian',test1,'LoG',test2,'opencv gaussian+laplacian',test3,'Fourier LoG',test4]
     drawFigures(drawList)
     return
     
@@ -125,7 +131,7 @@ def compareParametersOfloG(image):
             paramList.append([j,i])
     length = len(paramList)
     for i in range(length):
-        imgList.append(zeroCross(imageFilter(image,createLoGTemplate(paramList[i][0],paramList[i][1]))))
+        imgList.append(zeroCross(normalize(imageFourierFilter(image,createLoGTemplate(paramList[i][0],paramList[i][1])))))
         print("%.d%%\r"%(np.round(np.float(i+1)/length*100)))
     drawList = []
     for i in range(length):
@@ -197,18 +203,16 @@ def draw3D(Z):
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1,projection='3d')
     ax.axis('off')
+    ax.view_init(85, 30)
     ax.plot_surface(X,Y,Z,rstride=1,cstride=1,cmap=cm.coolwarm,linewidth=0,antialiased=False)     
     return
 
-def show3DforloG(size,sigma):
-    Z = createLoGTemplate(size,sigma)
-    X = range(size)
-    Y = range(size)
-    X, Y = np.meshgrid(X,Y)  
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 2, 1, projection='3d')
-    ax.axis('off')
-    ax.plot_surface(X,Y,Z,rstride=1,cstride=1,cmap=cm.coolwarm,linewidth=0,antialiased=False)   
+def show3DforloG():
+#    Z = createLoGTemplate(11,2)
+#    draw3D(Z)
+    Z = np.abs(np.fft.fftshift(np.fft.fft2(expandMatrix(createLoGTemplate(11,2),(101,101)))))
+    draw3D(Z)
+#    drawFigures(['',Z])
     return
     
 def mapTo255(matrix):
@@ -221,7 +225,7 @@ def mapTo255(matrix):
 
 def normalize(matrix):
     mean_ = np.mean(matrix)
-    std_ = np.std(matrix)
+#    std_ = np.std(matrix)
     max_ = np.max(matrix)
     min_ = np.min(matrix)
 #    return (matrix-mean_)/std_
@@ -237,27 +241,33 @@ def demoLowHighpassFilter(image):
     return
     
 def imageFourierFilter(src,template):
-    return np.abs(np.fft.fftshift(np.fft.ifft2(np.fft.fft2(image)*np.fft.fft2(expandMatrix(template,image.shape)))))
+    res = np.fft.ifftshift(np.fft.ifft2(np.fft.fft2(src)*np.fft.fft2(expandMatrix(template,src.shape))))
+    res = np.real(res)
+    res = normalize(res)
+    res = res*255
+    res = np.round(res)
+    return res.astype(np.int)
 
-def demoProcessOfFourier(image,template):
+def demoProcessOfFourier(src,template):
     list_ = []
     list_.append('original')
-    list_.append(image)
-    p1 = np.fft.fftshift(np.fft.fft2(image))
+    list_.append(src)
+    p1 = np.fft.fftshift(np.fft.fft2(src))
     list_.append('original fourior')
     list_.append(np.abs(p1))
     list_.append('template')
     list_.append(template)
-    p2 = np.fft.fftshift(np.fft.fft2(expandMatrix(template,image.shape)))
+    p2 = np.fft.fftshift(np.fft.fft2(expandMatrix(template,src.shape)))
     list_.append('template fourior')
     list_.append(np.abs(p2))
     p3 = p1*p2
     list_.append('multiply fourior')
     list_.append(np.abs(p3))
-    p4 = np.abs(np.fft.fftshift(np.fft.ifft2(p3)))
+    p4 = np.fft.fftshift(np.fft.ifft2(p3))
     list_.append('inverse fourior')
-    list_.append(p4)
-    p5 = normalize(p4)
+    list_.append(np.abs(p4))
+    
+    p5 = imageFourierFilter(src,template)
     list_.append('normalize')
     list_.append(p5)
     p6 = zeroCross(p5)
@@ -269,9 +279,20 @@ def demoProcessOfFourier(image,template):
 def demoImageFourierForm(image,zoomSize,avoidCentre=True):
     plt.figure()
     plt.axis('off')
-    plt.imshow(createFourierAnalysisForImage(image,21,avoidCentre))
+    plt.imshow(createFourierAnalysisForImage(image,zoomSize,avoidCentre))
     return
-#def fourier
+    
+def demoSimpleButtonProblem():
+    sigma = 1.5;
+    size = 17;
+    test = expandMatrix(np.ones((15,15),dtype=float),(71,71))*255
+    a1 = zeroCross(imageFilter(imageFilter(test,createGaussianTemplate(size,sigma)),createLaplacianTemplate(size)))
+    a2 = zeroCross(imageFilter(test,createLoGTemplate(size,sigma)))
+    a3 = zeroCross(imageFourierFilter(test,createLoGTemplate(size,sigma)))
+    drawFigures(['Gaussian+Laplacian',a1,'LoG',a2,'Fourier LoG',a3])
+    demoProcessOfFourier(test,createLoGTemplate(size,sigma))
+    return
+
 
 inputfile='nevermore.png'
 #inputfile='nature.png'
@@ -280,21 +301,12 @@ inputfile='nevermore.png'
 plt.gray()
 image = readImage(inputfile)
 
-
-#
-#plt.figure()
-#plt.axis('off')
-#test = expandMatrix(createLoGTemplate(21,3),image.shape)
-#plt.imshow(createFourierAnalysisForImage(test,image.shape[0],False))
-
-#plt.figure()
-#plt.axis('off')
-#plt.imshow(imageFilter(image,createLoGTemplate(21,3)))
-
-compareDifferentTypes(image)
+#compareDifferentTypes(image)
 #compareParametersOfloG(image)
-#fig = show3DforloG(21,2.6)
 
-#demoImageFourierForm(image,21,True)
+#show3DforloG()
+#demoImageFourierForm(image,71,True)
 #demoLowHighpassFilter(image)
-#demoProcessOfFourier(image,createLoGTemplate(21,3))
+demoProcessOfFourier(image,createLoGTemplate(11,2))
+#demoSimpleButtonProblem()
+
