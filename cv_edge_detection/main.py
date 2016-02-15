@@ -12,8 +12,11 @@ import matplotlib.pyplot as plt
 from timer import Timer
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 from matplotlib import cm
-from matplotlib.ticker import LinearLocator, FormatStrFormatter  
+from matplotlib.ticker import LinearLocator, FormatStrFormatter
 
+from numba import double
+from numba.decorators import jit, autojit
+import timeit
 
 def readImage(path):
     '''Read image as np array, from path'''
@@ -304,19 +307,50 @@ def demoSimpleButtonProblem():
     demoProcessOfFourier(test,createLoGTemplate(size,sigma))
     return
 
-inputfile='nevermore.png'
+def demoNumbaSpeedup(image):
+#    print timeit.timeit('imageFilter(image, gt)',\
+#    "from __main__ import image,gt,imageFilter", number=10)
+#    print timeit.timeit('imageFilter_numba(image, gt)',\
+#    "from __main__ import image,gt,imageFilter_numba", number=1)
+#    print timeit.timeit('imageFilter_numba(image, gt)',\
+#    "from __main__ import image,gt,imageFilter_numba", number=100)
+
+    it = timeit.Timer('imageFilter(image, gt)',"from __main__ import image,gt,imageFilter")
+    print it.repeat(5,1)
+    it = timeit.Timer('imageFilter_numba(image, gt)',"from __main__ import image,gt,imageFilter_numba")
+    print it.repeat(5,1)
+    
+    
+    
+#    with Timer() as t:
+#        zeroCross(image)
+#    print "=> Gaussian without numba spent: %s s" % t.secs
+#    with Timer() as t:
+#        zeroCross_numba(image)
+#    print "=> Gaussian with numba spent: %s s" % t.secs
+    return
+    
+
+#inputfile='nevermore.png'
+inputfile='lena_std.png'
 
 plt.gray()
 image = readImage(inputfile)
 
-print 'comparison'
-compareDifferentTypes(image)
+gt = createGaussianTemplate(11,2)
+imageFilter_numba = autojit(imageFilter)
+zeroCross_numba = autojit(zeroCross)
+demoNumbaSpeedup(image)
+
+
+#print 'comparison'
+#compareDifferentTypes(image)
 #compareParametersOfloG(image)
-print 'shape of template of LoG in frequency domain'
-show3DforloG()
+#print 'shape of template of LoG in frequency domain'
+#show3DforloG()
 #demoImageFourierForm(image,71,True)
 #demoLowHighpassFilter(image)
-print 'process of fourier for LoG'
-demoProcessOfFourier(image,createLoGTemplate(11,2))
-demoSimpleButtonProblem()
+#print 'process of fourier for LoG'
+#demoProcessOfFourier(image,createLoGTemplate(11,2))
+#demoSimpleButtonProblem()
 
