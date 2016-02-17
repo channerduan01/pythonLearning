@@ -28,10 +28,9 @@ def draw_circle(event,x,y,flags,param):
         print '%f,%f' %(x,y)
         p_list.append((x,y))
 
-
 cv2.namedWindow("test")
 cv2.setMouseCallback('test',draw_circle)
-cap=cv2.VideoCapture(0)
+cap = cv2.VideoCapture(0)
 
 # Take first frame and find corners in it
 ret, old_frame = cap.read()
@@ -79,4 +78,5 @@ while True:
     if p0 != None:
         p0 = p1.reshape(-1,1,2)
 
+cap = None
 cv2.destroyWindow("test")
