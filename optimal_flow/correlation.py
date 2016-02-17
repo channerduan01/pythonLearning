@@ -9,6 +9,7 @@ from PIL import Image
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
+from timer import Timer
 
 from numba import double
 from numba.decorators import jit, autojit
@@ -118,6 +119,37 @@ def flowCorrSAD(image1,image2,d,w):
                 N[x,y] = n
                 V[x,y] = v
     return N,V
+
+# redundance code is just for high performance! Though it mess my project~
+
+def flowCorrZSAD(image1,image2,d,w):
+    '''correlation optical flow, max displacement = d, window = 2*w+1, '''
+    if image1.shape != image2.shape:
+        raise Exception('illegal input') 
+    s = image1.shape
+    N = np.zeros(s,dtype=np.double)
+    V = np.zeros(s,dtype=np.double)  
+    margin = d+w
+    # search start at center
+    displacement = createSearchIndex(d)
+    for x in range(margin,s[0]-margin):
+            for y in range(margin,s[1]-margin):
+                minIntensities = 999999
+                n = v = 0
+                tmpMean = np.mean(image1[x-w:x+w+1,y-w:y+w+1])
+                for dx in displacement:
+                    for dy in displacement:
+                        intensities = np.sum( np.abs( \
+                            (image2[x+dx-w:x+dx+w+1,y+dy-w:y+dy+w+1]-np.mean(image2[x+dx-w:x+dx+w+1,y+dy-w:y+dy+w+1])) \
+                            - (image1[x-w:x+w+1,y-w:y+w+1]-tmpMean) \
+                            ) )
+                        if (intensities < minIntensities):
+                            minIntensities = intensities
+                            n = dy
+                            v = dx
+                N[x,y] = n
+                V[x,y] = v
+    return N,V
     
 def flowCorrSSD(image1,image2,d,w):
     '''correlation optical flow, max displacement = d, window = 2*w+1, '''
@@ -144,8 +176,38 @@ def flowCorrSSD(image1,image2,d,w):
                             v = dx
                 N[x,y] = n
                 V[x,y] = v
-    return N,V    
+    return N,V
     
+def flowCorrZSSD(image1,image2,d,w):
+    '''correlation optical flow, max displacement = d, window = 2*w+1, '''
+    if image1.shape != image2.shape:
+        raise Exception('illegal input') 
+    s = image1.shape
+    N = np.zeros(s,dtype=np.double)
+    V = np.zeros(s,dtype=np.double)  
+    margin = d+w
+    # search start at center
+    displacement = createSearchIndex(d)
+    for x in range(margin,s[0]-margin):
+            for y in range(margin,s[1]-margin):
+                minIntensities = 999999
+                n = v = 0
+                tmpMean = np.mean(image1[x-w:x+w+1,y-w:y+w+1])
+                for dx in displacement:
+                    for dy in displacement:
+                        intensities = np.sum( ( \
+                            (image2[x+dx-w:x+dx+w+1,y+dy-w:y+dy+w+1]-np.mean(image2[x+dx-w:x+dx+w+1,y+dy-w:y+dy+w+1])) \
+                            -(image1[x-w:x+w+1,y-w:y+w+1]-tmpMean) \
+                            )**2 )
+                        if (intensities < minIntensities):
+                            minIntensities = intensities
+                            n = dy
+                            v = dx
+                N[x,y] = n
+                V[x,y] = v
+    return N,V  
+
+
 def flowCorrCC(image1,image2,d,w):
     '''correlation optical flow, max displacement = d, window = 2*w+1, '''
     if image1.shape != image2.shape:
@@ -171,11 +233,126 @@ def flowCorrCC(image1,image2,d,w):
                             v = dx
                 N[x,y] = n
                 V[x,y] = v
-    return N,V      
-    
-    
+    return N,V
 
-
+def flowCorrNCC(image1,image2,d,w):
+    '''correlation optical flow, max displacement = d, window = 2*w+1, '''
+    if image1.shape != image2.shape:
+        raise Exception('illegal input') 
+    s = image1.shape
+    N = np.zeros(s,dtype=np.double)
+    V = np.zeros(s,dtype=np.double)  
+    margin = d+w
+    # search start at center
+    displacement = createSearchIndex(d)
+    for x in range(margin,s[0]-margin):
+            for y in range(margin,s[1]-margin):
+                maxIntensities = -9999999
+                n = v = 0
+                deno1 = np.sum(image1[x-w:x+w+1,y-w:y+w+1]**2)
+                for dx in displacement:
+                    for dy in displacement:
+                        deno2 = np.sum(image2[x+dx-w:x+dx+w+1,y+dy-w:y+dy+w+1]**2)
+                        intensities = np.sum(
+                            image2[x+dx-w:x+dx+w+1,y+dy-w:y+dy+w+1]*image1[x-w:x+w+1,y-w:y+w+1] \
+                            /(np.sqrt(deno1*deno2))
+                            )
+                        if (intensities > maxIntensities):
+                            maxIntensities = intensities
+                            n = dy
+                            v = dx
+                N[x,y] = n
+                V[x,y] = v
+    return N,V
+    
+def flowCorrZNCC(image1,image2,d,w):
+    '''correlation optical flow, max displacement = d, window = 2*w+1, '''
+    if image1.shape != image2.shape:
+        raise Exception('illegal input') 
+    s = image1.shape
+    N = np.zeros(s,dtype=np.double)
+    V = np.zeros(s,dtype=np.double)  
+    margin = d+w
+    # search start at center
+    displacement = createSearchIndex(d)
+    for x in range(margin,s[0]-margin):
+            for y in range(margin,s[1]-margin):
+                maxIntensities = -9999999
+                n = v = 0
+                tmpMean1 = np.mean(image1[x-w:x+w+1,y-w:y+w+1])
+                deno1 = np.sum((image1[x-w:x+w+1,y-w:y+w+1]-tmpMean1)**2)
+                for dx in displacement:
+                    for dy in displacement:
+                        tmpMean2 = np.mean(image2[x+dx-w:x+dx+w+1,y+dy-w:y+dy+w+1])
+                        deno = deno1 * np.sum((image2[x+dx-w:x+dx+w+1,y+dy-w:y+dy+w+1]-tmpMean2)**2)
+                        if deno != 0:
+                            intensities = np.sum(
+                                (image2[x+dx-w:x+dx+w+1,y+dy-w:y+dy+w+1]-tmpMean2) \
+                                * (image1[x-w:x+w+1,y-w:y+w+1]-tmpMean1) \
+                                /(np.sqrt(deno))
+                                )
+                        else:
+                            intensities = 0
+                        if (intensities > maxIntensities):
+                            maxIntensities = intensities
+                            n = dy
+                            v = dx
+                N[x,y] = n
+                V[x,y] = v
+    return N,V
+    
+def flowCorrZNCC_speedup(image1,image2,d,w):
+    '''correlation optical flow, max displacement = d, window = 2*w+1, '''
+    if image1.shape != image2.shape:
+        raise Exception('illegal input') 
+    s = image1.shape
+    N = np.zeros(s,dtype=np.double)
+    V = np.zeros(s,dtype=np.double)  
+    margin = d+w
+    # search start at center
+    displacement = createSearchIndex(d)
+    num = margin**2
+    table1 = np.zeros((s[0],s[1]),dtype=int)
+    table2 = np.zeros((s[0],s[1]),dtype=int)
+    table_deno2 = np.zeros((s[0],s[1]),dtype=float)
+    
+    for x in range(w,s[0]-w):
+            for y in range(w,s[1]-w):    
+                table1[x,y] = np.sum(image1[x-w:x+w+1,y-w:y+w+1])
+                table2[x,y] = np.sum(image2[x-w:x+w+1,y-w:y+w+1])
+                table_deno2[x,y] = np.sum((image2[x-w:x+w+1,y-w:y+w+1]-table2[x,y]/num)**2)
+    
+    for x in range(margin,s[0]-margin):
+            for y in range(margin,s[1]-margin):
+                maxIntensities = -9999999
+                n = v = 0
+#                tmpMean1 = np.mean(image1[x-w:x+w+1,y-w:y+w+1])
+                tmpMean1 = table1[x,y]/num
+                deno1 = np.sum((image1[x-w:x+w+1,y-w:y+w+1]-tmpMean1)**2)
+                for dx in displacement:
+                    for dy in displacement:
+#                        tmpMean2 = np.mean(image2[x+dx-w:x+dx+w+1,y+dy-w:y+dy+w+1])
+                        tmpMean2 = table2[x+dx,y+dy]/num
+#                        deno = deno1 * np.sum((image2[x+dx-w:x+dx+w+1,y+dy-w:y+dy+w+1]-tmpMean2)**2)
+                        deno = deno1 * table_deno2[x+dx,y+dy]    
+#                        print '%d %d %f %f' %(x+dx,y+dy,deno,deno_)
+                        if deno != 0:
+                            intensities = np.sum(
+                                (image2[x+dx-w:x+dx+w+1,y+dy-w:y+dy+w+1]-tmpMean2) \
+                                * (image1[x-w:x+w+1,y-w:y+w+1]-tmpMean1) \
+                                /(np.sqrt(deno))
+                                )
+                        else:
+                            intensities = 0
+                        if (intensities > maxIntensities):
+                            maxIntensities = intensities
+                            n = dy
+                            v = dx
+                N[x,y] = n
+                V[x,y] = v   
+    
+    return N,V
+    
 def drawQuiver(N,V,gap=1,figsize=5,scale_=1,title=''):
     plt.figure(figsize=(figsize, figsize))
     X, Y = np.meshgrid(range(N.shape[0]), np.arange(N.shape[1]-1,-1,-1))
@@ -196,50 +373,88 @@ def simpleDemo():
     drawQuiver(N,-V)
     return
 
-
-def differentMethodCompare(im1,im2,d,w):
-    N1,V1 = flowCorrSAD_numba(im1,im2,d,w)
-    N2,V2 = flowCorrSAD_numba(im1-np.mean(im1),im2-np.mean(im2),d,w)  
-    N3,V3 = flowCorrSSD_numba(im1,im2,d,w)
-    N4,V4 = flowCorrSSD_numba(im1-np.mean(im1),im2-np.mean(im2),d,w)   
-    
-    drawFigures(['SAD',np.sqrt(N1**2+V1**2),'ZSAD',np.sqrt(N1**2+V1**2),\
-        'SSD',np.sqrt(N1**2+V1**2),'ZSSD',np.sqrt(N1**2+V1**2)])    
+def distanceMeasureComparison(im1,im2,d,w):
+    with Timer() as t:
+        N1,V1 = flowCorrSAD_numba(im1,im2,d,w)
+    t1 = '%.2fs' % t.secs
+    with Timer() as t:
+        N2,V2 = flowCorrZSAD_numba(im1,im2,d,w)
+    t2 = '%.2fs' % t.secs  
+    with Timer() as t:
+        N3,V3 = flowCorrSSD_numba(im1,im2,d,w)
+    t3 = '%.2fs' % t.secs
+    with Timer() as t:
+        N4,V4 = flowCorrZSSD_numba(im1,im2,d,w)
+    t4 = '%.2fs' % t.secs
+    drawFigures(['SAD '+t1,np.sqrt(N1**2+V1**2),'ZSAD '+t2,np.sqrt(N1**2+V1**2),\
+        'SSD '+t3,np.sqrt(N1**2+V1**2),'ZSSD '+t4,np.sqrt(N1**2+V1**2)])    
     return
 
+def correlationMeasureComparison(im1,im2,d,w):
+    with Timer() as t:
+        N1,V1 = flowCorrCC_numba(im1,im2,d,w)
+    t1 = '%.2fs' % t.secs
+    with Timer() as t:
+        N2,V2 = flowCorrNCC_numba(im1,im2,d,w) 
+    t2 = '%.2fs' % t.secs  
+    with Timer() as t:
+        N3,V3 = flowCorrZNCC_numba(im1,im2,d,w) 
+    t3 = '%.2fs' % t.secs
+    with Timer() as t:
+        N4,V4 = flowCorrZNCC_speedup_numba(im1,im2,d,w) 
+    t4 = '%.2fs' % t.secs    
+    drawFigures(['CC '+t1,np.sqrt(N1**2+V1**2),'NCC '+t2,np.sqrt(N2**2+V2**2),\
+        'ZNCC '+t3,np.sqrt(N3**2+V3**2),'ZNCC (speedup) '+t4,np.sqrt(N4**2+V4**2)])    
+    return
+    
+
+def demoOpencvOpticalFlow(im1, im2):
+    flow = cv2.calcOpticalFlowFarneback(im1, im2, 0.5, 3, 13, 3, 5, 1.2, 0)
+    N = flow[:,:,0]
+    V = flow[:,:,1]    
+    return N,V
 
 plt.gray()
 flowCorrSAD_numba = autojit(flowCorrSAD)
+flowCorrZSAD_numba = autojit(flowCorrZSAD)
 flowCorrSSD_numba = autojit(flowCorrSSD)
+flowCorrZSSD_numba = autojit(flowCorrZSSD)
 
 flowCorrCC_numba = autojit(flowCorrCC)
+flowCorrNCC_numba = autojit(flowCorrNCC)
+flowCorrZNCC_numba = autojit(flowCorrZNCC)
+flowCorrZNCC_speedup_numba = autojit(flowCorrZNCC_speedup)
 
 #simpleDemo()
 
 im1,image1 = readImage('ffa.png')
 im2,image2 = readImage('ffb.png')
 
-#im1,image1 = readImage('s1.png')
-#im2,image2 = readImage('s2.png')
+#im1,image1 = readImage('pa.png')
+#im2,image2 = readImage('pb.png')
+
+#im1,image1 = readImage('a.png')
+#im2,image2 = readImage('b.png')
 
 sigma = 1.5
 im1_ = imageFourierFilter(im1,createGaussianTemplate(11,sigma))
 im2_ = imageFourierFilter(im2,createGaussianTemplate(11,sigma))
 
-#differentMethodCompare(im1_,im2_,5,2)
-#N,V = flowCorrCC_numba(im1_,im2_,5,2)
-#N,V = flowCorrCC_numba(im1_-np.mean(im1_),im2_-np.mean(im2_),5,2)
+#distanceMeasureComparison(im1,im2,6,6)
+#distanceMeasureComparison(im1_,im2_,6,6)
+correlationMeasureComparison(im1,im2,6,6)
+correlationMeasureComparison(im1_,im2_,6,6)
 
+#with Timer() as t:
+#    N,V = flowCorrZNCC_speedup_numba(im1,im2,5,6)
+#print 'my time cost:%.2fs' % t.secs  
 
-# dense flow
-#flow = cv2.calcOpticalFlowFarneback(im1, im2, 0.5, 3, 15, 3, 5, 1.2, 0)
-#N = flow[:,:,0]
-#V = flow[:,:,1]
+#with Timer() as t:
+#    N,V = demoOpencvOpticalFlow(im1, im2)
+#print 'opencv time cost:%.2fs' % t.secs 
 
-#drawFigures(['image1',image1,'image2',image2,'image1-2',im1-im2,'image2-1',im2-im1,'N',np.abs(N),'V',np.abs(V),'Magnitude',np.sqrt(N**2+V**2)])
-##
-#plt.figure(figsize=(7, 7))
-#plt.axis('off')
-#plt.imshow(draw_flow(image1.copy(),N,V))
-#drawQuiver(N,-V,5,10,0.7)
-    
+drawFigures(['image1',image1,'image2',image2,'image1-2',im1-im2,'image2-1',im2-im1,'N',np.abs(N),'V',np.abs(V),'Magnitude',np.sqrt(N**2+V**2)])
+plt.figure(figsize=(7, 7))
+plt.axis('off')
+plt.imshow(draw_flow(image1.copy(),N,V))
+drawQuiver(N,-V,5,10,0.7)

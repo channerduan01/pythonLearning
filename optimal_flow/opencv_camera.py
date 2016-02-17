@@ -7,6 +7,52 @@ Created on Sun Feb 14 09:29:16 2016
 import cv2
 import numpy as np
 
+
+def flowCorrZNCC_sparse(image1,image2,d,w,p0):
+    '''correlation optical flow, max displacement = d, window = 2*w+1, interest points = p'''
+    if image1.shape != image2.shape:
+        raise Exception('illegal input') 
+    s = image1.shape
+    N = np.zeros(s,dtype=np.double)
+    V = np.zeros(s,dtype=np.double)
+    
+    
+    for row in p0:
+        tu = tuple(row[0])
+        print tu
+        maxIntensities = -9999999
+        
+    
+    
+    margin = d+w
+    # search start at center
+    displacement = createSearchIndex(d)
+    for x in range(margin,s[0]-margin):
+            for y in range(margin,s[1]-margin):
+                maxIntensities = -9999999
+                n = v = 0
+                tmpMean1 = np.mean(image1[x-w:x+w+1,y-w:y+w+1])
+                deno1 = np.sum((image1[x-w:x+w+1,y-w:y+w+1]-tmpMean1)**2)
+                for dx in displacement:
+                    for dy in displacement:
+                        tmpMean2 = np.mean(image2[x+dx-w:x+dx+w+1,y+dy-w:y+dy+w+1])
+                        deno = deno1 * np.sum((image2[x+dx-w:x+dx+w+1,y+dy-w:y+dy+w+1]-tmpMean2)**2)
+                        if deno != 0:
+                            intensities = np.sum(
+                                (image2[x+dx-w:x+dx+w+1,y+dy-w:y+dy+w+1]-tmpMean2) \
+                                * (image1[x-w:x+w+1,y-w:y+w+1]-tmpMean1) \
+                                /(np.sqrt(deno))
+                                )
+                        else:
+                            intensities = 0
+                        if (intensities > maxIntensities):
+                            maxIntensities = intensities
+                            n = dy
+                            v = dx
+                N[x,y] = n
+                V[x,y] = v
+    return N,V
+
 # params for ShiTomasi corner detection
 feature_params = dict( maxCorners = 100,
                        qualityLevel = 0.3,
