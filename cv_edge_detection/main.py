@@ -89,7 +89,6 @@ def drawFigures(params):
     if (length < 2 or length%2 == 1):
         raise Exception("illegal input")
     for i in range(0,length,4):
-        plt.figure()
         plt.subplot(121)
         plt.title(params[i])
         plt.axis('off')
@@ -253,7 +252,7 @@ def demoLowHighpassFilter(image):
     plt.axis('off')
     plt.imshow(highpassFourierFilter(image,21))
     return
-    
+
 def imageFourierFilter(src,template):
     res = np.fft.ifftshift(np.fft.ifft2(np.fft.fft2(src)*np.fft.fft2(expandMatrix(template,src.shape))))
     res = np.real(res)

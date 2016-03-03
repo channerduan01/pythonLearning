@@ -1,0 +1,6 @@
+#
+# ELEC6024 submission definition
+#
+[Talk]
+Name: Chao Duan, Xuan Yang
+Title: Optical flow (differential and correlation)
